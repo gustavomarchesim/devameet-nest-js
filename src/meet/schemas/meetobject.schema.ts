@@ -26,8 +26,6 @@ export class MeetObject{
     @Prop()
     orientation: string;
 
-    @Prop({default: false})
-    canWalk: boolean;
 }
 
 export const MeetObjectSchema = SchemaFactory.createForClass(MeetObject);
