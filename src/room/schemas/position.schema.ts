@@ -15,6 +15,10 @@ export class Position {
     @Prop({type: mongoose.Schema.Types.ObjectId, ref: User.name})
     user: User;
 
+    // Adicionada Prop userId
+    @Prop() 
+    userId: string;
+
     @Prop({required: true})
     name: string;
 

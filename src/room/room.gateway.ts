@@ -1,4 +1,11 @@
-import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import {
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  OnGatewayInit,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
+} from '@nestjs/websockets';
 import { RoomService } from './room.service';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
@@ -11,12 +18,11 @@ type ActiveSocketType = {
   room: String;
   id: string;
   userId: string;
-}
+};
 
 @WebSocketGateway({ cors: true })
 export class RoomGateway implements OnGatewayInit, OnGatewayDisconnect {
-
-  constructor(private readonly service: RoomService) { }
+  constructor(private readonly service: RoomService) {}
 
   @WebSocketServer() wss: Server;
 
@@ -25,17 +31,18 @@ export class RoomGateway implements OnGatewayInit, OnGatewayDisconnect {
 
   async handleDisconnect(client: any) {
     const existingOnSocket = this.activeSockets.find(
-      socket => socket.id === client.id
+      (socket) => socket.id === client.id,
     );
 
     if (!existingOnSocket) return;
-
     this.activeSockets = this.activeSockets.filter(
-      socket => socket.id !== client.id
+      (socket) => socket.id !== client.id,
     );
 
     await this.service.deleteUsersPosition(client.id);
-    client.broadcast.emit(`${existingOnSocket.room}-remove-user`, { socketId: client.id });
+    client.broadcast.emit(`${existingOnSocket.room}-remove-user`, {
+      socketId: client.id,
+    });
 
     this.logger.debug(`Client: ${client.id} disconnected`);
   }
@@ -47,25 +54,45 @@ export class RoomGateway implements OnGatewayInit, OnGatewayDisconnect {
   @SubscribeMessage('join')
   async handleJoin(client: Socket, payload: JoinRoomDto) {
     const { link, userId } = payload;
-
     const existingOnSocket = this.activeSockets.find(
-      socket => socket.room === link && socket.id === client.id);
+      (socket) => socket.room === link && socket.id === client.id,
+    );
 
     if (!existingOnSocket) {
       this.activeSockets.push({ room: link, id: client.id, userId });
+      //Desafio: Não deixa a posição inicial ser a mesma do outro
+      const birthPlace = { x: 1, y: 1 };
+      const isBirthPlaceOccupied = await this.service.checkCollision(
+        {
+          link,
+          userId,
+          x: birthPlace.x,
+          y: birthPlace.y,
+          orientation: 'front',
+        },
+        link,
+      );
+
+      let newPosition;
+      if (isBirthPlaceOccupied) {
+        newPosition = {
+          x: Math.floor(Math.random() * 8) + 1,
+          y: Math.floor(Math.random() * 8) + 1,
+        };
+      } else {
+        newPosition = birthPlace;
+      }
 
       const dto = {
         link,
         userId,
-        x: 1,
-        y: 1,
-        orientation: 'front'
-      } as UpdateUserPositionDto
+        x: newPosition.x,
+        y: newPosition.y,
+        orientation: 'front',
+      } as UpdateUserPositionDto;
 
       await this.service.updateUserPosition(client.id, dto);
-
     }
-    
 
     const users = await this.service.listUsersPositionByLink(link);
     this.wss.emit(`${link}-update-user-list`, { users });
@@ -85,12 +112,15 @@ export class RoomGateway implements OnGatewayInit, OnGatewayDisconnect {
       userId,
       x,
       y,
-      orientation
-    } as UpdateUserPositionDto
-
-    await this.service.updateUserPosition(client.id, dto);
-    const users = await this.service.listUsersPositionByLink(link);
-    this.wss.emit(`${link}-update-user-list`, { users });
+      orientation,
+    } as UpdateUserPositionDto;
+    // Desafio One:One
+    const verfCollision = await this.service.checkCollision(dto, link);
+    if (!verfCollision) {
+      await this.service.updateUserPosition(client.id, dto);
+      const users = await this.service.listUsersPositionByLink(link);
+      this.wss.emit(`${link}-update-user-list`, { users });
+    }
   }
 
   @SubscribeMessage('toggl-mute-user')
@@ -106,7 +136,7 @@ export class RoomGateway implements OnGatewayInit, OnGatewayDisconnect {
     this.logger.debug(`callUser: ${client.id} to: ${data.to}`);
     client.to(data.to).emit('call-made', {
       offer: data.offer,
-      socket: client.id
+      socket: client.id,
     });
   }
 
@@ -115,7 +145,8 @@ export class RoomGateway implements OnGatewayInit, OnGatewayDisconnect {
     this.logger.debug(`makeAnswer: ${client.id} to: ${data.to}`);
     client.to(data.to).emit('answer-made', {
       answer: data.answer,
-      socket: client.id
+      socket: client.id,
     });
   }
 }
+
